@@ -141,10 +141,11 @@ function frameCamera(camera, design) {
 }
 
 /**
- * Render the design to a JPEG data URL (smaller than PNG for a photo-like image).
+ * Render the design to a data URL: JPEG by default (smaller than PNG for a photo-like image,
+ * used by the PDF), or PNG with `type: 'image/png'` (the "Save picture" download).
  * Throws when WebGL is unavailable; callers fall back to the PDF's own illustration.
  */
-export function renderSnapshot(design, catalog, { width, height } = SNAPSHOT_SIZE) {
+export function renderSnapshot(design, catalog, { width = SNAPSHOT_SIZE.width, height = SNAPSHOT_SIZE.height, type = 'image/jpeg' } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -174,7 +175,7 @@ export function renderSnapshot(design, catalog, { width, height } = SNAPSHOT_SIZ
     const camera = new THREE.PerspectiveCamera(22, width / height, 0.05, 80);
     frameCamera(camera, design);
     renderer.render(staged.scene, camera);
-    return canvas.toDataURL('image/jpeg', 0.9);
+    return type === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.9);
   } finally {
     if (group) disposeWardrobe(group);
     if (staged) {

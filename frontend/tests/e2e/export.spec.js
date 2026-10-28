@@ -48,3 +48,18 @@ test('choosing English sends language en', async ({ page }) => {
   expect((await request).postDataJSON().language).toBe('en');
   await page.waitForEvent('download');
 });
+
+test('Save picture downloads a PNG named after the size, made in the browser only', async ({ page }) => {
+  await openDesigner(page);
+  await page.getByTestId('open-export').click();
+  const requests = [];
+  page.on('request', (request) => requests.push(request.url()));
+  const download = page.waitForEvent('download');
+  await page.getByTestId('export-picture').click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('banai-200x240x60.png');
+  const bytes = await readFile(await file.path());
+  expect(bytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])); // PNG signature
+  await expect(page.getByTestId('export-status')).toHaveText('Your picture is downloading.');
+  expect(requests).toEqual([]); // nothing was sent to the server (or anywhere else)
+});

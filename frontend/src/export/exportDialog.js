@@ -6,6 +6,20 @@ import { exportPdf } from '../api/client.js';
 
 export const EXPORT_NOTE = 'Design drawing to explain the intent. Construction details are decided by the carpenter.';
 const FAILED = 'The PDF could not be created. Please try again.';
+const PICTURE_FAILED = 'The picture could not be created on this device.';
+
+/** "banai-200x240x60.png": the overall size in cm (a decimal only when the size has one). */
+export function pictureFilename(design) {
+  const { width, height, depth } = design.dimensions;
+  return `banai-${[width, height, depth].map((mm) => mm / 10).join('x')}.png`;
+}
+
+/** A data URL decoded in the browser (no fetch, so nothing touches the network). */
+function dataUrlToBlob(dataUrl) {
+  const [header, base64] = dataUrl.split(',');
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  return new Blob([bytes], { type: header.slice('data:'.length, header.indexOf(';')) });
+}
 
 function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -17,7 +31,10 @@ function saveBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** getSnapshot() returns the 3D picture as a data URL, or throws (the PDF then uses its own drawing). */
+/**
+ * getSnapshot(design, options) returns the 3D picture as a data URL, or throws (the PDF then uses
+ * its own drawing). "Save picture" asks it for a PNG and downloads it without contacting the server.
+ */
 export function createExportDialog({ getDesign, getLanguage, getSnapshot = null, exportImpl = exportPdf }) {
   let language = getLanguage();
   let busy = false;
@@ -55,6 +72,17 @@ export function createExportDialog({ getDesign, getLanguage, getSnapshot = null,
     }
   }, { variant: 'primary', testId: 'export-download' });
 
+  const savePicture = button('Save picture', () => {
+    if (!getSnapshot) return;
+    try {
+      const design = getDesign();
+      saveBlob(dataUrlToBlob(getSnapshot(design, { type: 'image/png' })), pictureFilename(design));
+      status.textContent = 'Your picture is downloading.';
+    } catch {
+      status.textContent = PICTURE_FAILED; // no WebGL here
+    }
+  }, { testId: 'export-picture', disabled: !getSnapshot });
+
   const dialog = createDialog({
     title: 'PDF for your carpenter',
     labelId: 'export-dialog-title',
@@ -65,7 +93,7 @@ export function createExportDialog({ getDesign, getLanguage, getSnapshot = null,
       el('span', { className: 'chip', text: EXPORT_NOTE }),
       status,
     ],
-    actions: [download, button('Close', () => dialog.close(), { variant: 'ghost', testId: 'export-close' })],
+    actions: [download, savePicture, button('Close', () => dialog.close(), { variant: 'ghost', testId: 'export-close' })],
   });
   return {
     ...dialog,
